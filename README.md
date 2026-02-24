@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HotelPro — Customer Digital Menu
 
-## Getting Started
+This is the customer-facing frontend for the Premium Hotel Menu System. It is designed to be accessed via mobile devices when guests scan a table's QR code.
 
-First, run the development server:
+## 🚀 Two-Part System architecture
+This repository (`customer-menu` branch) contains the **Customer Menu**.
+The **Admin Dashboard** is located on the `main` branch of this repository.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Customer Menu Features
+- Mobile-first, highly polished UI using Radix UI primitives and complex animations.
+- Dynamic categorization and instant search.
+- Seamless cart management and order placement.
+- Tied directly to table numbers via URL parameters (e.g., `?table=T-01`).
+
+## 🛠️ Tech Stack
+- **Framework:** Next.js 16 (App Router)
+- **UI Components:** shadcn/ui + Radix UI
+- **Styling:** Tailwind CSS + Framer Motion
+- **Database:** Supabase (Used by the dashboard to read/write real-time orders)
+
+## 💻 Local Development Setup
+
+To test the end-to-end QR code flow, this server must be reachable by phones on the same local Wi-Fi network.
+
+### 1. Environment Variables
+Create a `.env.local` file in the root of this project:
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_RESTAURANT_ID=rest001
+
+# Set to your machine's LAN IP
+NEXT_PUBLIC_MENU_BASE_URL=http://<YOUR_LAN_IP>:3001
+NEXT_PUBLIC_MENU_CUSTOMER_PATH=/customer
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Run the Server
+We run this on a separate port (`3001`) so it doesn't conflict with the Admin Dashboard (`3000`), and we bind it to `0.0.0.0` so other devices on the LAN can reach it.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev -- --port 3001 --hostname 0.0.0.0
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The menu will be accessible locally at `http://localhost:3001/customer` and from phones at `http://<YOUR_LAN_IP>:3001/customer`.
