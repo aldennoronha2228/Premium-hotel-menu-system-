@@ -165,7 +165,7 @@ function OrderSummaryContent() {
 
                             {/* Thank you footer */}
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="text-center mt-8 p-6 bg-gradient-to-r from-[#D4AF37]/10 to-[#E8C96F]/10 rounded-3xl">
-                                <p className="text-[#1B4332] font-semibold mb-1">Thank you for choosing Grandeur Hotel</p>
+                                <p className="text-[#1B4332] font-semibold mb-1">Thank you for choosing us</p>
                                 <p className="text-gray-500 text-sm">We hope you enjoy your dining experience 🌟</p>
                             </motion.div>
                         </motion.div>

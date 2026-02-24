@@ -32,7 +32,10 @@ export default function OrderHistoryPage() {
         try {
             setError(null); setLoading(true);
             setAllOrders(await fetchOrderHistory(200));
-        } catch { setError('Could not load order history from Supabase.'); }
+        } catch (err: any) {
+            console.error('loadHistory error:', err);
+            setError(err.message || 'Could not load order history from Supabase.');
+        }
         finally { setLoading(false); }
     };
 

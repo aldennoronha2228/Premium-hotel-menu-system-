@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { GlobalSearch } from '@/components/dashboard/GlobalSearch';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
 const navigation = [
     { name: 'Live Orders', href: '/dashboard/orders', icon: ShoppingBag, shortName: 'Orders' },
@@ -164,19 +166,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <Menu className="w-5 h-5 text-slate-600" />
                         </button>
                         <div className="hidden md:block flex-1 max-w-md">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                <input type="text" placeholder="Search orders, menu items..." className="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200/60 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/40 transition-all" />
-                            </div>
+                            <GlobalSearch />
                         </div>
                         <div className="flex items-center gap-2 lg:gap-3">
-                            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="md:hidden w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center transition-colors">
-                                <Search className="w-5 h-5 text-slate-600" />
-                            </motion.button>
-                            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="relative w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 flex items-center justify-center transition-colors">
-                                <Bell className="w-5 h-5 text-slate-600" />
-                                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full"></span>
-                            </motion.button>
+                            <NotificationBell />
                             <div className="relative">
                                 <motion.button
                                     whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}

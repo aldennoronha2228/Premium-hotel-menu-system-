@@ -47,23 +47,30 @@ export async function getSession(): Promise<Session | null> {
     return data.session;
 }
 
-// ─── Check if current user is an admin ───────────────────────────────────────
 export async function checkIsAdmin(user: User): Promise<boolean> {
     const email = user.email;
     if (!email) return false;
 
-    const { data, error } = await supabase
-        .from('admin_users')
-        .select('id, is_active')
-        .eq('email', email)
-        .eq('is_active', true)
-        .maybeSingle();
+    try {
+        const { data, error } = await supabase
+            .from('admin_users')
+            .select('id, is_active')
+            .eq('email', email)
+            .eq('is_active', true)
+            .maybeSingle();
 
-    if (error) {
-        console.error('Admin check error:', error);
+        if (error) {
+            console.error('Admin check PostgrestError:', error.message || error.code || JSON.stringify(error));
+            if (String(error.message).includes('Failed to fetch')) {
+                console.error('Network error reaching Supabase. Make sure your NEXT_PUBLIC_SUPABASE_URL is correct.');
+            }
+            return false;
+        }
+        return data !== null;
+    } catch (err: any) {
+        console.error('Admin check Exception:', err.message || JSON.stringify(err));
         return false;
     }
-    return data !== null;
 }
 
 // ─── Update last_login timestamp ─────────────────────────────────────────────

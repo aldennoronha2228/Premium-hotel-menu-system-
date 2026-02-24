@@ -54,8 +54,9 @@ export async function deleteOrder(orderId: string): Promise<void> {
 export function subscribeToOrders(
     onChange: (orders: DashboardOrder[]) => void
 ): RealtimeChannel {
+    const channelId = `orders-rt-${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-        .channel('orders-rt')
+        .channel(channelId)
         .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'orders' },

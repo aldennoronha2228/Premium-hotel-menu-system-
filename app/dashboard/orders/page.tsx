@@ -30,16 +30,19 @@ export default function LiveOrdersPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => { setFloorTables(getTables()); }, []);
 
     const loadOrders = useCallback(async () => {
+        setLoading(true);
         try {
             setError(null);
             const data = await fetchActiveOrders();
             setOrders(data);
         } catch (err: any) {
-            setError('Could not connect to database. Check your .env Supabase credentials.');
+            console.error('loadOrders failed:', err);
+            setError(err.message || 'Could not connect to database. Check your .env Supabase credentials.');
         } finally {
             setLoading(false);
         }
@@ -47,8 +50,17 @@ export default function LiveOrdersPage() {
 
     useEffect(() => {
         loadOrders();
-        const channel = subscribeToOrders(setOrders);
-        return () => { channel.unsubscribe(); };
+        let channel: any = null;
+
+        // Timeout to ensure initial load finishes before subscribing
+        const timer = setTimeout(() => {
+            channel = subscribeToOrders(setOrders);
+        }, 500);
+
+        return () => {
+            clearTimeout(timer);
+            if (channel) channel.unsubscribe();
+        };
     }, [loadOrders]);
 
     // Automatically sync table status based on active orders

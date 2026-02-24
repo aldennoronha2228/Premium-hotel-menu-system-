@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabaseCustomer as supabase } from '@/lib/supabase';
 import type { CartItem } from '@/context/CartContext';
 
 export interface SubmitOrderResult {

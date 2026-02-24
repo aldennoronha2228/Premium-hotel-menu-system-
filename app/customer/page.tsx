@@ -10,7 +10,7 @@ import { MenuItemCard } from '@/components/customer/MenuItemCard';
 import { CartDrawer } from '@/components/customer/CartDrawer';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabaseCustomer as supabase } from '@/lib/supabase';
 import { applyAvailabilityOverrides, seedAvailabilityMap } from '@/lib/menuAvailability';
 
 // Fallback static items in case Supabase isn't set up yet
@@ -140,7 +140,7 @@ function CustomerMenuContent() {
                 <div className="max-w-7xl mx-auto px-4 md:px-8 py-4">
                     <div className="flex items-center justify-between">
                         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-                            <h1 className="text-3xl md:text-4xl font-bold text-[#1B4332]">Grandeur <span className="text-[#D4AF37]">Hotel</span></h1>
+                            <h1 className="text-3xl md:text-4xl font-bold text-[#1B4332]">ME<span className="text-[#D4AF37]">NU</span></h1>
                             <p className="text-sm text-gray-600 mt-1">{tableId ? `Table ${tableId} · Fine Dining Experience` : 'Fine Dining Experience'}</p>
                         </motion.div>
                         <div className="flex items-center gap-3">
