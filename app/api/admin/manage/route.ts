@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
 
     try {
         if (!verifyKey(req)) {
-            console.warn('[admin-manage] Unauthorized access attempt');
-            return NextResponse.json({ error: 'Unauthorized: Invalid Admin Key' }, { status: 401 });
+            console.warn('[admin-manage] Access Denied: Header mismatch.');
+            return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Manage)' }, { status: 401 });
         }
 
         const roleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     if (!verifyKey(req)) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid Admin Key' }, { status: 401 });
+        return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Action)' }, { status: 401 });
     }
 
     try {

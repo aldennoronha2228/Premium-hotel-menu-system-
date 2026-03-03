@@ -16,7 +16,7 @@ function verifyKey(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
     if (!verifyKey(req)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Settings-Get)' }, { status: 401 });
     }
 
     try {
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     if (!verifyKey(req)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Settings-Set)' }, { status: 401 });
     }
 
     try {

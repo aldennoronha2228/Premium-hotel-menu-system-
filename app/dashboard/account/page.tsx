@@ -36,37 +36,46 @@ export default function AccountPage() {
     const [isSitePublic, setIsSitePublic] = useState<boolean>(true);
     const [updatingVisibility, setUpdatingVisibility] = useState(false);
 
+    // ─── Security Token Storage ───────────────────────────────────────────────
+    // Once verified, we keep the clean key here to use for all actions.
+    const [verifiedMasterKey, setVerifiedMasterKey] = useState<string>('');
+
     // ─── Fetch Admins (Privileged) ───────────────────────────────────────────
     const fetchAdmins = async (key: string) => {
-        console.log('[AccountPage] fetchAdmins start. Key length:', key.length);
+        const cleanKey = key.trim();
         setLoadingAdmins(true);
         try {
-            const res = await fetch('/api/admin/manage', {
+            // cb=... is a cache-buster. It forces the browser to get fresh data.
+            const res = await fetch(`/api/admin/manage?cb=${Date.now()}`, {
                 method: 'GET',
-                headers: { 'x-admin-key': key }
+                headers: { 'x-admin-key': cleanKey }
             });
 
             console.log('[AccountPage] fetch status:', res.status, res.ok);
 
             const text = await res.text();
+            console.log('[AccountPage] Raw response from server:', text);
+
             let data: any;
             try {
                 data = JSON.parse(text);
             } catch (err) {
-                console.error('[AccountPage] JSON parse failed. Body:', text.slice(0, 100));
-                throw new Error('Server returned invalid response. Check console.');
+                console.error('[AccountPage] JSON parse failed. Body snippet:', text.slice(0, 50));
+                throw new Error(`Server Error: Unexpected response format. (Status: ${res.status})`);
             }
 
             if (!res.ok) {
                 console.warn('[AccountPage] fetch error:', data.error);
-                throw new Error(data.error || 'Failed to fetch admins');
+                throw new Error(data.error || 'Access Denied');
             }
 
-            console.log('[AccountPage] fetch success. Admin count:', data.length);
             setAdmins(data);
 
+            // SUCCESS: We store this key for all future actions during this session.
+            setVerifiedMasterKey(cleanKey);
+
             // Also fetch the Global Site settings while we have the key!
-            await fetchSiteSettings(key);
+            await fetchSiteSettings(cleanKey);
 
             setIsUnlocked(true);
             setShowGate(false);
@@ -86,8 +95,8 @@ export default function AccountPage() {
      */
     const fetchSiteSettings = async (key: string) => {
         try {
-            const res = await fetch('/api/admin/settings', {
-                headers: { 'x-admin-key': key }
+            const res = await fetch(`/api/admin/settings?cb=${Date.now()}`, {
+                headers: { 'x-admin-key': key.trim() }
             });
             if (!res.ok) return;
             const data = await res.json();
@@ -104,13 +113,21 @@ export default function AccountPage() {
      */
     const handleToggleVisibility = async () => {
         const nextValue = !isSitePublic;
+        const cleanKey = verifiedMasterKey.trim();
+
+        if (!cleanKey) {
+            toast.error('Session expired. Please unlock controls again.');
+            setIsUnlocked(false);
+            return;
+        }
+
         setUpdatingVisibility(true);
         try {
-            const res = await fetch('/api/admin/settings', {
+            const res = await fetch(`/api/admin/settings?cb=${Date.now()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-admin-key': gatePassword
+                    'x-admin-key': cleanKey
                 },
                 body: JSON.stringify({ key: 'is_site_public', value: nextValue })
             });
@@ -142,11 +159,11 @@ export default function AccountPage() {
         e.preventDefault();
         setAddingAdmin(true);
         try {
-            const res = await fetch('/api/admin/manage', {
+            const res = await fetch(`/api/admin/manage?cb=${Date.now()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-admin-key': gatePassword
+                    'x-admin-key': verifiedMasterKey.trim()
                 },
                 body: JSON.stringify({ email: newAdminEmail, action: 'add' })
             });
@@ -154,7 +171,7 @@ export default function AccountPage() {
             if (!res.ok) throw new Error(data.error);
             toast.success(data.message);
             setNewAdminEmail('');
-            fetchAdmins(gatePassword);
+            fetchAdmins(verifiedMasterKey);
         } catch (err: any) {
             toast.error(err.message);
         } finally {
@@ -164,18 +181,18 @@ export default function AccountPage() {
 
     const handleRemoveAdmin = async (email: string) => {
         try {
-            const res = await fetch('/api/admin/manage', {
+            const res = await fetch(`/api/admin/manage?cb=${Date.now()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-admin-key': gatePassword
+                    'x-admin-key': verifiedMasterKey.trim()
                 },
                 body: JSON.stringify({ email, action: 'remove' })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error);
             toast.success(data.message);
-            fetchAdmins(gatePassword);
+            fetchAdmins(verifiedMasterKey);
         } catch (err: any) {
             toast.error(err.message);
         }
