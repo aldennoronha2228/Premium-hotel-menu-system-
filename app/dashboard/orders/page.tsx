@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Clock, X, Plus, Trash2, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getTables, menuItems, type Table } from '@/data/sharedData';
-import { fetchActiveOrders, updateOrderStatus, deleteOrder, subscribeToOrders } from '@/lib/api';
+import { fetchActiveOrders, updateOrderStatus, deleteOrder } from '@/lib/api';
 import type { DashboardOrder } from '@/lib/types';
 
 const statusConfig = {
@@ -31,35 +31,35 @@ export default function LiveOrdersPage() {
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const updateQueue = useRef<Record<string, Promise<void>>>({});
 
     useEffect(() => { setFloorTables(getTables()); }, []);
 
-    const loadOrders = useCallback(async () => {
-        setLoading(true);
+    const loadOrders = useCallback(async (isBackground = false) => {
+        if (!isBackground) setLoading(true);
         try {
-            setError(null);
             const data = await fetchActiveOrders();
             setOrders(data);
+            setError(null);
         } catch (err: any) {
-            console.error('loadOrders failed:', err);
-            setError(err.message || 'Could not connect to database. Check your .env Supabase credentials.');
+            setError(err.message || 'Could not connect to database.');
         } finally {
-            setLoading(false);
+            if (!isBackground) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
+        // Initial foreground load
         loadOrders();
-        let channel: any = null;
 
-        // Timeout to ensure initial load finishes before subscribing
-        const timer = setTimeout(() => {
-            channel = subscribeToOrders(setOrders);
-        }, 500);
+        // 3-second background polling mechanism
+        // Extremely consistent and entirely avoids WebSocket connection pool deadlocks
+        const intervalId = setInterval(() => {
+            loadOrders(true);
+        }, 3000);
 
         return () => {
-            clearTimeout(timer);
-            if (channel) channel.unsubscribe();
+            clearInterval(intervalId);
         };
     }, [loadOrders]);
 
@@ -69,8 +69,8 @@ export default function LiveOrdersPage() {
 
         const activeTableIds = new Set(
             orders
-                .filter(o => ['new', 'preparing', 'done'].includes(o.status))
-                .map(o => o.table)
+                .filter(o => ['new', 'preparing', 'done'].includes(o.status) && o.table)
+                .map(o => o.table.toString().trim().toLowerCase())
         );
 
         import('@/data/sharedData').then(({ getTables, setTables }) => {
@@ -78,7 +78,14 @@ export default function LiveOrdersPage() {
             let changed = false;
             const updatedTables = currentTables.map(t => {
                 // Check if the table ID or Name matches the order's table field
-                const hasActiveOrder = activeTableIds.has(t.id) || activeTableIds.has(t.name) || activeTableIds.has(t.id.replace('T-', ''));
+                const strippedId = t.id.replace('T-', ''); // "05"
+                const numStr = parseInt(strippedId, 10).toString(); // "5"
+                const hasActiveOrder = activeTableIds.has(t.id.toLowerCase()) ||
+                    activeTableIds.has(t.name.toLowerCase()) ||
+                    activeTableIds.has(strippedId.toLowerCase()) ||
+                    activeTableIds.has(numStr.toLowerCase()) ||
+                    activeTableIds.has(`table ${numStr}`);
+
                 const targetStatus = hasActiveOrder ? 'busy' : 'available';
 
                 if (t.status !== targetStatus) {
@@ -96,11 +103,16 @@ export default function LiveOrdersPage() {
     }, [orders]);
 
     const handleStatusChange = async (orderId: string, status: DashboardOrder['status']) => {
-        setActionLoading(orderId);
+        // Optimistically update the UI instantly so users can click continuously without waiting
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-        try { await updateOrderStatus(orderId, status); }
-        catch { loadOrders(); }
-        setActionLoading(null);
+
+        // Enqueue the API request to prevent database state race conditions
+        const prevPromise = updateQueue.current[orderId] || Promise.resolve();
+        const nextPromise = prevPromise.then(async () => {
+            try { await updateOrderStatus(orderId, status); }
+            catch { loadOrders(); }
+        });
+        updateQueue.current[orderId] = nextPromise;
     };
 
     const handleDeleteOrder = async (orderId: string) => {
@@ -139,6 +151,21 @@ export default function LiveOrdersPage() {
     const activeOrders = orders.filter(o => ['new', 'preparing', 'done'].includes(o.status));
     const busyTables = floorTables.filter(t => t.status === 'busy').length;
 
+    const displayedOrders = selectedTableId
+        ? activeOrders.filter(o => {
+            const t = floorTables.find(t => t.id === selectedTableId);
+            if (!t) return false;
+            const oTable = (o.table || '').toString().trim().toLowerCase();
+            const strippedId = t.id.replace('T-', '');
+            const numStr = parseInt(strippedId, 10).toString();
+            return oTable === t.id.toLowerCase() ||
+                oTable === t.name.toLowerCase() ||
+                oTable === strippedId.toLowerCase() ||
+                oTable === numStr.toLowerCase() ||
+                oTable === `table ${numStr}`;
+        })
+        : activeOrders;
+
     if (loading) return (
         <div className="flex items-center justify-center h-64">
             <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
@@ -155,7 +182,7 @@ export default function LiveOrdersPage() {
                     <h1 className="text-2xl font-semibold text-slate-900">Live Orders</h1>
                     <p className="text-sm text-slate-500 mt-1">Monitor active orders and restaurant floor status</p>
                 </div>
-                <button onClick={loadOrders} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                <button onClick={() => loadOrders(false)} className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
                     <RefreshCw className="w-4 h-4 text-slate-500" />
                 </button>
             </div>
@@ -202,7 +229,21 @@ export default function LiveOrdersPage() {
                         {floorTables.map(table => {
                             const config = tableStatusConfig[table.status];
                             const isSelected = selectedTableId === table.id;
-                            const tableOrder = activeOrders.find(o => o.table === table.id || o.table === table.name || o.table === table.id.replace('T-', ''));
+
+                            // Find all orders for this specific table to show in the tooltip
+                            const tableOrders = activeOrders.filter(o => {
+                                const oTable = (o.table || '').toString().trim().toLowerCase();
+                                const strippedId = table.id.replace('T-', '');
+                                const numStr = parseInt(strippedId, 10).toString();
+                                return oTable === table.id.toLowerCase() ||
+                                    oTable === table.name.toLowerCase() ||
+                                    oTable === strippedId.toLowerCase() ||
+                                    oTable === numStr.toLowerCase() ||
+                                    oTable === `table ${numStr}`;
+                            });
+
+                            // Flatten items across all orders for this table
+                            const tableItems = tableOrders.flatMap(o => o.items);
 
                             return (
                                 <div key={table.id} style={{ position: 'absolute', left: table.x * 0.7, top: table.y * 0.7 }} className="relative z-10">
@@ -222,10 +263,10 @@ export default function LiveOrdersPage() {
                                                 <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white/95 border-l border-t border-slate-200/60 rotate-45" />
                                                 <div className="relative z-10">
                                                     <h4 className="text-xs font-bold text-slate-800 mb-2 border-b border-slate-100 pb-1">Table {table.id} Orders</h4>
-                                                    {tableOrder && tableOrder.items.length > 0 ? (
+                                                    {tableItems.length > 0 ? (
                                                         <ul className="space-y-1.5 max-h-32 overflow-y-auto">
-                                                            {tableOrder.items.map(item => (
-                                                                <li key={item.id} className="text-[10px] flex justify-between">
+                                                            {tableItems.map((item, idx) => (
+                                                                <li key={`${item.id}-${idx}`} className="text-[10px] flex justify-between">
                                                                     <span className="text-slate-600 truncate mr-2">{item.name}</span>
                                                                     <span className="font-semibold text-slate-900">x{item.quantity}</span>
                                                                 </li>
@@ -257,12 +298,12 @@ export default function LiveOrdersPage() {
                         </div>
                     )}
                     <div className="space-y-3 max-h-[500px] lg:max-h-[580px] overflow-y-auto pr-2">
-                        {activeOrders.map((order, i) => {
+                        {displayedOrders.map((order, i) => {
                             const config = statusConfig[order.status];
                             const total = order.items.reduce((acc, item) => acc + item.quantity * item.price, 0);
-                            const isUpdating = actionLoading === order.id;
+                            const isDeleting = actionLoading === order.id;
                             return (
-                                <motion.div key={order.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className={cn('bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all', isUpdating && 'opacity-60')}>
+                                <motion.div key={order.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.08 }} className={cn('bg-white rounded-2xl p-5 border border-slate-200/60 shadow-sm hover:shadow-md transition-all', isDeleting && 'opacity-60')}>
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="flex items-center gap-3">
                                             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
@@ -270,13 +311,13 @@ export default function LiveOrdersPage() {
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h3 className="font-semibold text-slate-900">Table {order.table}</h3>
+                                                    <h3 className="font-semibold text-slate-900">{order.table ? `Table ${order.table}` : 'Takeaway / Unassigned'}</h3>
                                                     <motion.span animate={{ scale: order.status === 'new' ? [1, 1.1, 1] : 1 }} transition={{ repeat: order.status === 'new' ? Infinity : 0, duration: 2 }} className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-medium', config.bg, config.text)}>{config.label}</motion.span>
                                                 </div>
                                                 <div className="flex items-center gap-1 text-xs text-slate-500"><Clock className="w-3 h-3" />{order.time}</div>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleDeleteOrder(order.id)} disabled={isUpdating} className="p-1 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors text-slate-400">
+                                        <button onClick={() => handleDeleteOrder(order.id)} disabled={isDeleting} className="p-1 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors text-slate-400">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -302,9 +343,9 @@ export default function LiveOrdersPage() {
                                             <span className="text-xl font-bold text-slate-900">${total.toFixed(2)}</span>
                                         </div>
                                         <div className="flex gap-2">
-                                            {order.status === 'new' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'preparing')} disabled={isUpdating} className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all disabled:opacity-50">Start Preparing</motion.button>}
-                                            {order.status === 'preparing' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'done')} disabled={isUpdating} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all disabled:opacity-50">Mark as Ready</motion.button>}
-                                            {order.status === 'done' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'paid')} disabled={isUpdating} className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all disabled:opacity-50">Mark as Paid ✓</motion.button>}
+                                            {order.status === 'new' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'preparing')} className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all">Start Preparing</motion.button>}
+                                            {order.status === 'preparing' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'done')} className="flex-1 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-medium text-sm shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all">Mark as Ready</motion.button>}
+                                            {order.status === 'done' && <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleStatusChange(order.id, 'paid')} className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all">Mark as Paid ✓</motion.button>}
                                         </div>
                                     </div>
                                 </motion.div>

@@ -20,6 +20,11 @@ function OrderSummaryContent() {
     const [errorMsg, setErrorMsg] = React.useState('');
     const submitted = React.useRef(false);
 
+    // Freeze a copy of the cart for the receipt after we clear the global cart
+    const [receiptCart] = React.useState(cart);
+    const [receiptTotal] = React.useState(totalPrice);
+    const [receiptItemCount] = React.useState(totalItems || cart.length);
+
     React.useEffect(() => {
         if (submitted.current || cart.length === 0) {
             // Nothing in cart — go back to menu
@@ -112,7 +117,7 @@ function OrderSummaryContent() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm text-gray-600">Items</p>
-                                        <p className="text-2xl font-bold text-[#1B4332]">{totalItems || cart.length}</p>
+                                        <p className="text-2xl font-bold text-[#1B4332]">{receiptItemCount}</p>
                                     </div>
                                 </div>
                             </motion.div>
@@ -130,7 +135,7 @@ function OrderSummaryContent() {
                             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white rounded-3xl p-6 shadow-lg mb-6">
                                 <h2 className="text-xl font-bold text-[#1B4332] mb-4">Your Order</h2>
                                 <div className="space-y-3 mb-6">
-                                    {cart.length > 0 ? cart.map((item, i) => (
+                                    {receiptCart.length > 0 ? receiptCart.map((item, i) => (
                                         <motion.div key={item.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 + i * 0.07 }}
                                             className="flex items-center gap-4 pb-3 border-b border-gray-100 last:border-0">
                                             <img src={item.image} alt={item.name} className="w-16 h-16 rounded-xl object-cover" />
@@ -145,11 +150,11 @@ function OrderSummaryContent() {
                                     )}
                                 </div>
                                 <div className="pt-4 border-t-2 border-[#D4AF37]/30 space-y-2">
-                                    <div className="flex justify-between text-sm"><span className="text-gray-600">Subtotal</span><span className="font-semibold">${totalPrice.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-sm"><span className="text-gray-600">Subtotal</span><span className="font-semibold">${receiptTotal.toFixed(2)}</span></div>
                                     <div className="flex justify-between text-sm"><span className="text-gray-600">Service Fee</span><span className="font-semibold">$5.00</span></div>
                                     <div className="flex justify-between text-lg pt-2 border-t border-gray-200">
                                         <span className="font-bold text-[#1B4332]">Total</span>
-                                        <span className="font-bold text-[#1B4332]">${(totalPrice + 5).toFixed(2)}</span>
+                                        <span className="font-bold text-[#1B4332]">${(receiptTotal + 5).toFixed(2)}</span>
                                     </div>
                                 </div>
                             </motion.div>

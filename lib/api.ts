@@ -73,6 +73,13 @@ export function subscribeToOrders(
     return channel;
 }
 
+/** Cleanly remove order subscription channel */
+export async function unsubscribeFromOrders(channel: RealtimeChannel) {
+    if (channel) {
+        await supabase.removeChannel(channel);
+    }
+}
+
 // ─── MENU ITEMS ─────────────────────────────────────────────────────────────
 
 /** Fetch all menu items with their category */

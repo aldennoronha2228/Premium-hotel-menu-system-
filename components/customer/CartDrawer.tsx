@@ -10,10 +10,17 @@ import { useRouter } from 'next/navigation';
 export const CartDrawer: React.FC<{ tableId?: string }> = ({ tableId = '' }) => {
     const { cart, isCartOpen, setIsCartOpen, totalPrice, updateQuantity, removeFromCart } = useCart();
     const router = useRouter();
+    const [manualTable, setManualTable] = React.useState(tableId || '');
+
+    // Sync state if URL prop changes
+    React.useEffect(() => {
+        setManualTable(tableId || '');
+    }, [tableId]);
 
     const handleCheckout = () => {
         setIsCartOpen(false);
-        const url = tableId ? `/customer/order-summary?table=${encodeURIComponent(tableId)}` : '/customer/order-summary';
+        const finalTable = manualTable.trim();
+        const url = finalTable ? `/customer/order-summary?table=${encodeURIComponent(finalTable)}` : '/customer/order-summary';
         router.push(url);
     };
 
@@ -60,9 +67,19 @@ export const CartDrawer: React.FC<{ tableId?: string }> = ({ tableId = '' }) => 
                         </div>
                         {cart.length > 0 && (
                             <motion.div initial={{ y: 100 }} animate={{ y: 0 }} className="border-t border-gray-200 p-6 space-y-4 bg-white">
-                                <div className="flex justify-between items-center text-lg">
+                                <div className="flex justify-between items-center text-lg mb-2">
                                     <span className="font-semibold text-gray-700">Total:</span>
                                     <motion.span key={totalPrice} initial={{ scale: 1.2, color: '#D4AF37' }} animate={{ scale: 1, color: '#1B4332' }} className="font-bold text-2xl">${totalPrice.toFixed(2)}</motion.span>
+                                </div>
+                                <div className="flex items-center gap-3 mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                                    <label className="text-sm font-semibold text-gray-700 whitespace-nowrap">Table #</label>
+                                    <input
+                                        type="text"
+                                        value={manualTable}
+                                        onChange={e => setManualTable(e.target.value)}
+                                        className="border-none bg-white shadow-sm rounded-lg px-3 py-2 w-full text-sm outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                                        placeholder="e.g. 10 or T-05 (optional)"
+                                    />
                                 </div>
                                 <motion.button onClick={handleCheckout} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-gradient-to-r from-[#D4AF37] to-[#E8C96F] text-[#1B4332] py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all">
                                     Proceed to Checkout

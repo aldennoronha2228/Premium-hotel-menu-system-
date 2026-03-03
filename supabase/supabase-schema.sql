@@ -3,6 +3,22 @@
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 
+-- 0. RESTAURANTS
+CREATE TABLE IF NOT EXISTS public.restaurants (
+    id   TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    logo TEXT
+);
+
+-- 0.5 ADMIN USERS
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    email      TEXT PRIMARY KEY,
+    full_name  TEXT,
+    is_active  BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login TIMESTAMPTZ
+);
+
 -- 1. CATEGORIES
 CREATE TABLE IF NOT EXISTS public.categories (
     id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.menu_items (
 CREATE TABLE IF NOT EXISTS public.orders (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     daily_order_number SERIAL,
-    restaurant_id      TEXT NOT NULL DEFAULT 'rest001',
+    restaurant_id      TEXT NOT NULL DEFAULT 'rest001' REFERENCES public.restaurants(id),
     table_number       TEXT NOT NULL,
     total              NUMERIC(10,2) NOT NULL DEFAULT 0,
     status             TEXT NOT NULL DEFAULT 'new'
@@ -129,6 +145,10 @@ END $$;
 -- ============================================================
 -- SEED — sample categories & menu items (optional, delete if not needed)
 -- ============================================================
+INSERT INTO public.restaurants (id, name) VALUES
+    ('rest001', 'My Restaurant')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO public.categories (name, display_order) VALUES
     ('Breakfast',    1),
     ('Appetizers',   2),

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
-import { signInWithEmail, signInWithGoogle } from '@/lib/auth';
+import { signInWithEmail, signInWithGoogle, signUpWithEmail } from '@/lib/auth';
 import { useAuth } from '@/context/AuthContext';
 
 function GoogleIcon() {
@@ -83,8 +83,15 @@ export default function LoginPage() {
         if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
         setFormLoading(true); setError(null); setInfo(null);
         try {
-            await signInWithEmail(email, password);
-            router.replace('/dashboard/orders');
+            if (mode === 'signup') {
+                if (!fullName) { setError('Please enter your full name.'); setFormLoading(false); return; }
+                await signUpWithEmail(email, password, fullName);
+                setInfo('Account created successfully! You can now sign in.');
+                setMode('signin');
+            } else {
+                await signInWithEmail(email, password);
+                router.replace('/dashboard/orders');
+            }
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
             if (msg.includes('Invalid login credentials')) { setError('Incorrect email or password. Please try again.'); }

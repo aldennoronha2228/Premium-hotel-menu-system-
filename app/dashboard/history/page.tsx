@@ -28,18 +28,24 @@ export default function OrderHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const loadHistory = async () => {
+    const loadHistory = async (isMounted = true) => {
         try {
-            setError(null); setLoading(true);
-            setAllOrders(await fetchOrderHistory(200));
+            if (isMounted) { setError(null); setLoading(true); }
+            const data = await fetchOrderHistory(200);
+            if (isMounted) setAllOrders(data);
         } catch (err: any) {
             console.error('loadHistory error:', err);
-            setError(err.message || 'Could not load order history from Supabase.');
+            if (isMounted) setError(err.message || 'Could not load order history from Supabase.');
+        } finally {
+            if (isMounted) setLoading(false);
         }
-        finally { setLoading(false); }
     };
 
-    useEffect(() => { loadHistory(); }, []);
+    useEffect(() => {
+        let isMounted = true;
+        loadHistory(isMounted);
+        return () => { isMounted = false; };
+    }, []);
 
     const filteredOrders = allOrders.filter(o => {
         if (selectedDate === 'today') return isToday(o.created_at);
@@ -79,7 +85,7 @@ export default function OrderHistoryPage() {
                     <p className="text-sm text-slate-500 mt-1">View and analyze past orders</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={loadHistory} className="p-2 rounded-xl hover:bg-slate-100 transition-colors"><RefreshCw className="w-4 h-4 text-slate-500" /></button>
+                    <button onClick={() => loadHistory(true)} className="p-2 rounded-xl hover:bg-slate-100 transition-colors"><RefreshCw className="w-4 h-4 text-slate-500" /></button>
                     <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={exportCSV} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-shadow w-full sm:w-auto">
                         <Download className="w-4 h-4" />Export CSV
                     </motion.button>
