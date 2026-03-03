@@ -58,18 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let isActive = true;
 
-        // SAFETY: If auth takes more than 1.5s, just show the UI to prevent "stuck" screens.
-        // The dashboard layout will handles redirection if auth truly fails later.
+        // SAFETY: If auth completely hangs (e.g. no network), release the gate after 2.5s
         const safetyTimer = setTimeout(() => {
             if (isActive && !hasInitialized.current) {
-                console.warn('[AuthContext] Auth-gate safety release engaged.');
+                console.warn('[AuthContext] Progressive safety release.');
                 setState(prev => ({ ...prev, loading: false }));
                 hasInitialized.current = true;
             }
-        }, 1500);
+        }, 2500);
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`[AuthContext] AuthEvent: ${event}`);
+            console.log(`[AuthContext] event: ${event}`);
 
             if (!session?.user) {
                 if (isActive) {
@@ -80,18 +79,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return;
             }
 
+            // PROGRESSIVE LOAD: Set session/user immediately so the dashboard can render
+            if (isActive) {
+                setState(prev => ({
+                    ...prev,
+                    session,
+                    user: session.user,
+                    loading: false,
+                    error: null
+                }));
+                hasInitialized.current = true;
+                clearTimeout(safetyTimer);
+            }
+
+            // BACKGROUND TASK: Verify admin status without blocking the UI
             try {
-                // Background check - don't block if we already have a session
                 const isAdmin = await checkIsAdmin(session.user).catch(() => false);
 
                 if (isActive) {
-                    setState({ session, user: session.user, isAdmin, loading: false, error: null });
-                    hasInitialized.current = true;
-                    clearTimeout(safetyTimer);
+                    setState(prev => ({ ...prev, isAdmin }));
+
+                    if (event === 'SIGNED_IN' && isAdmin) {
+                        await updateLastLogin(session.user.email!).catch(() => { });
+                    }
                 }
             } catch (err: any) {
-                console.error('[AuthContext] Update failed:', err);
-                if (isActive) setState(prev => ({ ...prev, loading: false }));
+                console.error('[AuthContext] Background check error:', err);
             }
         });
 
