@@ -79,6 +79,7 @@ export const CartDrawer: React.FC<{ tableId?: string }> = ({ tableId = '' }) => 
                                         onChange={e => setManualTable(e.target.value)}
                                         className="border-none bg-white shadow-sm rounded-lg px-3 py-2 w-full text-sm outline-none focus:ring-2 focus:ring-[#D4AF37]"
                                         placeholder="e.g. 10 or T-05 (optional)"
+                                        readOnly={!!tableId}
                                     />
                                 </div>
                                 <motion.button onClick={handleCheckout} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full bg-gradient-to-r from-[#D4AF37] to-[#E8C96F] text-[#1B4332] py-4 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all">
