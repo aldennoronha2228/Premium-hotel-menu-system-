@@ -32,6 +32,10 @@ export default function AccountPage() {
     const [addingAdmin, setAddingAdmin] = useState(false);
     const [showGate, setShowGate] = useState(false);
 
+    // ─── Global Site Visibility State ─────────────────────────────────────────
+    const [isSitePublic, setIsSitePublic] = useState<boolean>(true);
+    const [updatingVisibility, setUpdatingVisibility] = useState(false);
+
     // ─── Fetch Admins (Privileged) ───────────────────────────────────────────
     const fetchAdmins = async (key: string) => {
         console.log('[AccountPage] fetchAdmins start. Key length:', key.length);
@@ -60,6 +64,10 @@ export default function AccountPage() {
 
             console.log('[AccountPage] fetch success. Admin count:', data.length);
             setAdmins(data);
+
+            // Also fetch the Global Site settings while we have the key!
+            await fetchSiteSettings(key);
+
             setIsUnlocked(true);
             setShowGate(false);
             toast.success('Admin management unlocked');
@@ -69,6 +77,52 @@ export default function AccountPage() {
             setIsUnlocked(false);
         } finally {
             setLoadingAdmins(false);
+        }
+    };
+
+    /** 
+     * SITE VISIBILITY LOGIC:
+     * We fetch the 'is_site_public' setting from the server.
+     */
+    const fetchSiteSettings = async (key: string) => {
+        try {
+            const res = await fetch('/api/admin/settings', {
+                headers: { 'x-admin-key': key }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const publicSetting = data.find((s: any) => s.key === 'is_site_public');
+            if (publicSetting) setIsSitePublic(publicSetting.value === true);
+        } catch (err) {
+            console.error('Failed to load settings');
+        }
+    };
+
+    /**
+     * TOGGLE GLOBAL ACCESS:
+     * This function flips the website between "Public" and "Admin-Only".
+     */
+    const handleToggleVisibility = async () => {
+        const nextValue = !isSitePublic;
+        setUpdatingVisibility(true);
+        try {
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': gatePassword
+                },
+                body: JSON.stringify({ key: 'is_site_public', value: nextValue })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            setIsSitePublic(nextValue);
+            toast.success(nextValue ? 'Site is now PUBLIC' : 'Site is now ADMIN-ONLY');
+        } catch (err: any) {
+            toast.error(err.message);
+        } finally {
+            setUpdatingVisibility(false);
         }
     };
 
@@ -286,6 +340,55 @@ export default function AccountPage() {
                                             ))}
                                         </tbody>
                                     </table>
+                                </div>
+
+                                {/* Global Site Accessibility Section */}
+                                <div className="mt-8 pt-8 border-t border-slate-100">
+                                    <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-200/60">
+                                        <div className="flex items-center gap-4">
+                                            <div className={cn(
+                                                "w-12 h-12 rounded-xl flex items-center justify-center transition-colors duration-500",
+                                                isSitePublic ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+                                            )}>
+                                                {isSitePublic ? <ShieldCheck className="w-6 h-6" /> : <ShieldAlert className="w-6 h-6" />}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 leading-tight">Global Website Access</h4>
+                                                <p className="text-xs text-slate-500 mt-0.5">
+                                                    {isSitePublic
+                                                        ? 'The website is currently PUBLIC for everyone.'
+                                                        : 'The website is locked for MAINTENANCE (Admin Only).'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <span className={cn(
+                                                "text-[10px] font-bold uppercase tracking-wider",
+                                                isSitePublic ? "text-emerald-600" : "text-amber-600"
+                                            )}>
+                                                {isSitePublic ? 'Public' : 'Hidden'}
+                                            </span>
+                                            <button
+                                                onClick={handleToggleVisibility}
+                                                disabled={updatingVisibility}
+                                                className={cn(
+                                                    "relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ring-2 ring-offset-2",
+                                                    isSitePublic ? "bg-emerald-500 ring-emerald-500/20" : "bg-slate-300 ring-slate-300/20",
+                                                    updatingVisibility && "opacity-50 cursor-not-allowed"
+                                                )}
+                                            >
+                                                <span className={cn(
+                                                    "inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 ease-in-out",
+                                                    isSitePublic ? "translate-x-6" : "translate-x-1"
+                                                )} />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <p className="mt-4 text-[10px] text-slate-400 italic text-center">
+                                        * Note: Changing this value updates the website for ALL users instantly.
+                                    </p>
                                 </div>
                             </motion.div>
                         )}

@@ -189,6 +189,49 @@ export async function deleteCategory(id: string): Promise<void> {
     if (error) throw error;
 }
 
+// ─── SETTINGS ───────────────────────────────────────────────────────────────
+
+/** 
+ * Check if the website is currently "Public" or "Admin-Only" 
+ * 
+ * Logic: We search the 'site_settings' table for a key named 'is_site_public'.
+ * If the value is true, anyone can browse. If not, only admins can enter.
+ */
+export async function fetchIsSitePublic(): Promise<boolean> {
+    const { data, error } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'is_site_public')
+        .single();
+
+    if (error) {
+        console.error('Error fetching site status:', error.message);
+        // Default to public if database check fails (prevent lockout if table is missing)
+        return true;
+    }
+
+    // Since we store it as JSONB, it returns as a JavaScript value
+    return data.value === true;
+}
+
+/**
+ * Toggle the Site's Public Visibility.
+ * 
+ * IMPORTANT: This should ONLY be called from the Admin dashboard.
+ * Logic: An "Update" is like a "Saved Change" in the database.
+ */
+export async function updateSitePublic(isPublic: boolean): Promise<void> {
+    const { error } = await supabase
+        .from('site_settings')
+        .update({ value: isPublic })
+        .eq('key', 'is_site_public');
+
+    if (error) {
+        console.error('Error updating site status:', error.message);
+        throw error;
+    }
+}
+
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
 function mapOrder(raw: any): DashboardOrder {
