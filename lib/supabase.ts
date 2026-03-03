@@ -30,16 +30,6 @@ export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: true,
         flowType: 'pkce',            // SECURITY: prevents auth-code interception
-        // Bypass the defective navigator.locks API in Gotrue that throws 'steal' AbortErrors
-        // and causes infinite stalled promises. We use a simple in-memory Mutex queue.
-        lock: (() => {
-            let memoryLock: Promise<any> = Promise.resolve();
-            return async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
-                const acquiredLock = memoryLock.then(fn).catch(fn);
-                memoryLock = acquiredLock.then(() => { }).catch(() => { });
-                return acquiredLock;
-            };
-        })(),
     },
     global: {
         headers: {
