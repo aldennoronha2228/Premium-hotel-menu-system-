@@ -19,6 +19,64 @@ import { validateEnv, env } from './env';
 // Run at module load — throws if env is broken
 validateEnv();
 
+/**
+ * Custom fetcher that routes requests through our local proxy
+ * when running in the browser. This circumvents "Failed to fetch"
+ * errors caused by security software (e.g. Kaspersky) blocking
+ * direct connections to the supabase.co domain.
+ */
+const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    let urlStr: string;
+    let requestInit: RequestInit = init || {};
+
+    if (input instanceof Request) {
+        urlStr = input.url;
+        // Merge headers from Request object
+        const headers = new Headers(requestInit.headers || {});
+        input.headers.forEach((v, k) => {
+            if (!headers.has(k)) headers.set(k, v);
+        });
+        requestInit = {
+            ...requestInit,
+            method: input.method || requestInit.method,
+            headers,
+            // body cannot be easily cloned from Request if it's already used
+            // but for Supabase client, input is usually just the URL info or a fresh Request
+        };
+    } else {
+        urlStr = input.toString();
+    }
+
+    if (typeof window === 'undefined') return fetch(input, requestInit);
+
+    try {
+        const u = new URL(urlStr);
+        const supabaseHost = new URL(env.supabaseUrl).hostname;
+
+        if (u.hostname === supabaseHost) {
+            // Build the proxy path: /api/auth/proxy?path=...
+            const proxyUrl = new URL('/api/auth/proxy', window.location.origin);
+
+            // Normalize path (ensure no leading slash)
+            let path = u.pathname;
+            if (path.startsWith('/')) path = path.slice(1);
+
+            proxyUrl.searchParams.set('path', path);
+
+            // Forward all existing query parameters
+            u.searchParams.forEach((v, k) => {
+                proxyUrl.searchParams.set(k, v);
+            });
+
+            return fetch(proxyUrl.toString(), requestInit);
+        }
+    } catch (err) {
+        // If URL parsing fails or it's a relative URL, just pass through
+    }
+
+    return fetch(input, requestInit);
+};
+
 // ─── Dashboard client (authenticated) ────────────────────────────────────────
 // Used by all /dashboard/* pages and auth flows.
 // Session is persisted in localStorage under a namespaced key.
@@ -29,9 +87,10 @@ export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        flowType: 'pkce',            // SECURITY: prevents auth-code interception
+        flowType: 'pkce',
     },
     global: {
+        fetch: customFetch,
         headers: {
             'X-Client-Info': 'hotel-dashboard/1.0',
         },
@@ -47,11 +106,26 @@ export const supabaseCustomer = createClient(env.supabaseUrl, env.supabaseAnonKe
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false,
-        storageKey: '__none__',      // explicit: no storage key
+        storageKey: '__none__',
     },
     global: {
+        fetch: customFetch,
         headers: {
             'X-Client-Info': 'hotel-customer/1.0',
         },
     },
 });
+// ─── Admin Client (Privileged - Service Role) ────────────────────────────────
+// REQUIRED: for administrative tasks where RLS needs to be bypassed.
+// Uses SUPABASE_SERVICE_ROLE_KEY from .env.
+// SECURITY: NEVER use this on the client-side!
+export const supabaseAdmin = createClient(
+    env.supabaseUrl,
+    (typeof window === 'undefined' ? (process.env.SUPABASE_SERVICE_ROLE_KEY || env.supabaseAnonKey) : env.supabaseAnonKey),
+    {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        },
+    }
+);

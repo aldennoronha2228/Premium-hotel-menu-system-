@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
     ShoppingBag, History, UtensilsCrossed, QrCode,
-    ChevronLeft, Bell, Search, Menu, X, LogOut
+    ChevronLeft, Bell, Search, Menu, X, LogOut, UserCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -18,6 +18,7 @@ const navigation = [
     { name: 'Order History', href: '/dashboard/history', icon: History, shortName: 'History' },
     { name: 'Menu Management', href: '/dashboard/menu', icon: UtensilsCrossed, shortName: 'Menu' },
     { name: 'Tables & QR', href: '/dashboard/tables', icon: QrCode, shortName: 'Tables' },
+    { name: 'Account Settings', href: '/dashboard/account', icon: UserCircle, shortName: 'Account' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

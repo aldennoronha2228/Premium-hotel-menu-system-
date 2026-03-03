@@ -10,12 +10,15 @@
  *     after an explicit, successful checkIsAdmin() call.
  *  3. TOKEN_REFRESHED events: re-check admin status when access tokens refresh
  *     (in case the admin was deactivated between sessions).
- *  4. Expiry check: sessions older than the token expiry are cleared.
- *  5. signOut clears local state immediately before the async Supabase call so
+ *  4. signOut clears local state immediately before the async Supabase call so
  *     the UI can't be navigated during the round-trip.
+ *  5. FIX: Race condition between getSession() and onAuthStateChange(SIGNED_IN)
+ *     that caused GoTrue "Lock broken by another request" errors is resolved by
+ *     letting onAuthStateChange be the single source of truth for state updates
+ *     during the initial load window.
  */
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { checkIsAdmin, updateLastLogin, signOut as authSignOut } from '@/lib/auth';
 import { securityLog } from '@/lib/logger';
@@ -49,37 +52,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error: null,
     });
 
-    useEffect(() => {
-        // ── 1. Get initial session ──────────────────────────────────────────
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
-            if (session?.user) {
-                // SECURITY: always verify admin status server-side — don't trust localStorage
-                const isAdmin = await checkIsAdmin(session.user);
-                if (isAdmin) {
-                    await updateLastLogin(session.user.email!);
-                } else {
-                    securityLog.warn('AUTHZ_DENIED', { reason: 'not_admin', email: session.user.email });
-                }
-                setState({ session, user: session.user, isAdmin, loading: false, error: null });
-            } else {
-                setState(s => ({ ...s, session: null, user: null, isAdmin: false, loading: false }));
-            }
-        }).catch(err => {
-            console.error('Auth Context getSession Error:', err);
-            setState(s => ({ ...s, session: null, user: null, isAdmin: false, loading: false, error: err.message }));
-        });
+    // Track if we've handled the initial session load
+    const hasInitialized = useRef(false);
 
-        // ── 2. Subscribe to auth state changes ─────────────────────────────
+    useEffect(() => {
+        // onAuthStateChange handles the initial session check AND all subsequent changes.
+        // It fires a callback immediately upon subscription with the current session.
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (event === 'SIGNED_OUT' || !session?.user) {
-                // SECURITY: zero out all state immediately on sign-out
+            console.log(`[AuthContext] event: ${event}`, session ? 'has session' : 'no session');
+
+            if (!session?.user) {
+                // SECURITY: clear state immediately
                 setState({ session: null, user: null, isAdmin: false, loading: false, error: null });
+                hasInitialized.current = true;
                 return;
             }
 
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-                // SECURITY: re-check admin status on every auth event — admin may have
-                // been deactivated since the last session was created.
+            // For all authenticated events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, etc.)
+            try {
+                // LOCK FIX: Give the auth client a small tick to finalize its own state 
+                // and release storage locks before we start a new DB request.
+                await new Promise(r => setTimeout(r, 10));
+
+                // SECURITY: re-check admin status
                 const isAdmin = await checkIsAdmin(session.user);
 
                 if (event === 'SIGNED_IN' && isAdmin) {
@@ -87,10 +82,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
 
                 setState({ session, user: session.user, isAdmin, loading: false, error: null });
+            } catch (err: any) {
+                console.error('[AuthContext] Admin check failed:', err);
+                setState({ session, user: session.user, isAdmin: false, loading: false, error: err.message });
+            } finally {
+                hasInitialized.current = true;
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     // SECURITY: clear local state FIRST, then call the async signOut, so the

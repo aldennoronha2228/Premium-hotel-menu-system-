@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { signInWithEmail, signInWithGoogle, signUpWithEmail } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
 function GoogleIcon() {
@@ -70,6 +71,19 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
 
+    // Clear any stale/broken session tokens on the login page
+    // This stops the GoTrue _recoverAndRefresh error from firing on every load
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            // Remove the namespaced session key we set in lib/supabase.ts
+            localStorage.removeItem('hotel-menu-auth-v13');
+            // Also remove any legacy sb-* keys
+            Object.keys(localStorage)
+                .filter(k => k.startsWith('sb-') && k.includes('auth'))
+                .forEach(k => localStorage.removeItem(k));
+        }
+    }, []);
+
     useEffect(() => {
         if (!loading && session) {
             if (isAdmin) { router.replace('/dashboard/orders'); }
@@ -86,7 +100,7 @@ export default function LoginPage() {
             if (mode === 'signup') {
                 if (!fullName) { setError('Please enter your full name.'); setFormLoading(false); return; }
                 await signUpWithEmail(email, password, fullName);
-                setInfo('Account created successfully! You can now sign in.');
+                setInfo('Account created! Check your email to confirm, then sign in.');
                 setMode('signin');
             } else {
                 await signInWithEmail(email, password);
@@ -94,8 +108,8 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             const msg = err?.message ?? 'Authentication failed';
-            if (msg.includes('Invalid login credentials')) { setError('Incorrect email or password. Please try again.'); }
-            else if (msg.includes('Email not confirmed')) { setError('Please confirm your email address first. Check your inbox.'); }
+            if (msg.includes('Invalid login credentials') || msg.includes('invalid_grant')) { setError('Incorrect email or password. Please try again.'); }
+            else if (msg.includes('Email not confirmed') || msg.includes('email_not_confirmed')) { setError('Please confirm your email address first. Check your inbox.'); }
             else if (msg.includes('User already registered')) { setError('This email is already registered. Try signing in instead.'); }
             else if (msg.includes('not authorized') || msg.includes('not the owner')) { setError('Your account does not have dashboard access. Contact the administrator.'); }
             else { setError(msg); }
