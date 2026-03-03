@@ -42,19 +42,18 @@ function buildSecurityHeaders(nonce: string): Record<string, string> {
     const supabaseHost = SUPABASE_URL ? new URL(SUPABASE_URL).hostname : '';
 
     // Content Security Policy
-    // 'nonce-${nonce}' allows inline scripts inserted by Next.js hydration
     const csp = [
         `default-src 'self'`,
-        // Scripts: self + nonce for Next.js inline scripts
-        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-        // Styles: self + unsafe-inline (required by Tailwind/Next.js; tighten with nonce if using CSS-in-JS)
+        // Scripts: allow self, inline scripts, eval (needed by some Next.js/Vercel tools), and Vercel domains
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://cdn.vercel-insights.com`,
+        // Styles: self + unsafe-inline (required by Tailwind/Next.js)
         `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
         // Fonts
         `font-src 'self' https://fonts.gstatic.com`,
-        // Images: self + Unsplash + data URIs (for QR code canvas)
+        // Images: self + Unsplash + data URIs (for QR code canvas) + avatars
         `img-src 'self' data: blob: https://images.unsplash.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com`,
-        // API/WebSocket connections: self + Supabase
-        `connect-src 'self' https://${supabaseHost} wss://${supabaseHost}`,
+        // API/WebSocket connections: self + Supabase + Vercel live updates
+        `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://vercel.live wss://ws-us3.pusher.com https://vitals.vercel-insights.com`,
         // No iframes
         `frame-ancestors 'none'`,
         `frame-src 'none'`,
