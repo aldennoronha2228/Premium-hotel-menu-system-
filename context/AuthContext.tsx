@@ -64,6 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else {
                 setState(s => ({ ...s, session: null, user: null, isAdmin: false, loading: false }));
             }
+        }).catch(err => {
+            console.error('Auth Context getSession Error:', err);
+            setState(s => ({ ...s, session: null, user: null, isAdmin: false, loading: false, error: err.message }));
         });
 
         // ── 2. Subscribe to auth state changes ─────────────────────────────
