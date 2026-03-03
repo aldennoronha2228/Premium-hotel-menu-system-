@@ -18,11 +18,17 @@ function verifyKey(req: NextRequest) {
 
     const isValid = key === secret && secret !== '';
 
-    console.log('[admin-manage] verify check:', {
-        provided_len: key.length,
-        actual_len: secret.length,
-        match: isValid
-    });
+    if (!isValid) {
+        console.warn('[admin-manage] MISMATCH DIAGNOSTICS:', {
+            provided: `[${key}]`,
+            provided_chars: Array.from(key).map(c => c.charCodeAt(0)),
+            secret_chars: Array.from(secret).map(c => c.charCodeAt(0)),
+            provided_len: key.length,
+            secret_len: secret.length
+        });
+    } else {
+        console.log('[admin-manage] match verified successfully.');
+    }
 
     return isValid;
 }
