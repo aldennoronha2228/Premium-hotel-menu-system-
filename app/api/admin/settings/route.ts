@@ -11,11 +11,19 @@ import { supabaseAdmin } from '@/lib/supabase';
 function verifyKey(req: NextRequest) {
     const key = (req.headers.get('x-admin-key') || '').trim();
     const secret = (process.env.ADMIN_ACCESS_KEY || '').trim();
-    return key === secret && secret !== '';
+
+    if (!secret) return { isValid: false, reason: 'SERVER_CONFIG_MISSING' };
+
+    const isValid = key === secret;
+    return { isValid, reason: isValid ? null : 'KEY_MISMATCH' };
 }
 
 export async function GET(req: NextRequest) {
-    if (!verifyKey(req)) {
+    const { isValid, reason } = verifyKey(req);
+    if (!isValid) {
+        if (reason === 'SERVER_CONFIG_MISSING') {
+            return NextResponse.json({ error: 'Server Config Error: Secret Missing' }, { status: 500 });
+        }
         return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Settings-Get)' }, { status: 401 });
     }
 
@@ -31,7 +39,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    if (!verifyKey(req)) {
+    const { isValid, reason } = verifyKey(req);
+    if (!isValid) {
+        if (reason === 'SERVER_CONFIG_MISSING') {
+            return NextResponse.json({ error: 'Server Config Error: Secret Missing' }, { status: 500 });
+        }
         return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Settings-Set)' }, { status: 401 });
     }
 

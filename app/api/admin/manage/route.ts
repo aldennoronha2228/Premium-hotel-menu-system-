@@ -16,29 +16,25 @@ function verifyKey(req: NextRequest) {
     const key = (req.headers.get('x-admin-key') || '').trim();
     const secret = (process.env.ADMIN_ACCESS_KEY || '').trim();
 
-    const isValid = key === secret && secret !== '';
+    // ERROR: If the server itself doesn't have the key set, that's a config issue.
+    if (!secret) return { isValid: false, reason: 'SERVER_CONFIG_MISSING' };
 
-    if (!isValid) {
-        console.warn('[admin-manage] MISMATCH DIAGNOSTICS:', {
-            provided: `[${key}]`,
-            provided_chars: Array.from(key).map(c => c.charCodeAt(0)),
-            secret_chars: Array.from(secret).map(c => c.charCodeAt(0)),
-            provided_len: key.length,
-            secret_len: secret.length
-        });
-    } else {
-        console.log('[admin-manage] match verified successfully.');
-    }
-
-    return isValid;
+    const isValid = key === secret;
+    return { isValid, reason: isValid ? null : 'KEY_MISMATCH' };
 }
 
 export async function GET(req: NextRequest) {
     console.log('[admin-manage] GET request received');
 
     try {
-        if (!verifyKey(req)) {
-            console.warn('[admin-manage] Access Denied: Header mismatch.');
+        const { isValid, reason } = verifyKey(req);
+        if (!isValid) {
+            if (reason === 'SERVER_CONFIG_MISSING') {
+                return NextResponse.json({
+                    error: 'Server Misconfigured: Missing ADMIN_ACCESS_KEY',
+                    detail: 'Please add ADMIN_ACCESS_KEY to your hosting environment variables.'
+                }, { status: 500 });
+            }
             return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Manage)' }, { status: 401 });
         }
 
@@ -74,7 +70,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    if (!verifyKey(req)) {
+    const { isValid, reason } = verifyKey(req);
+    if (!isValid) {
+        if (reason === 'SERVER_CONFIG_MISSING') {
+            return NextResponse.json({ error: 'Server Config Error: Secret Missing' }, { status: 500 });
+        }
         return NextResponse.json({ error: 'Auth Error: Invalid Master Key (Action)' }, { status: 401 });
     }
 
