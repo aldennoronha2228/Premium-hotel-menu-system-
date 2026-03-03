@@ -70,6 +70,9 @@ export default function LoginPage() {
     const [googleLoading, setGoogleLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [info, setInfo] = useState<string | null>(null);
+    const [showManualConfirm, setShowManualConfirm] = useState(false);
+    const [manualKey, setManualKey] = useState('');
+    const [confirming, setConfirming] = useState(false);
 
     // Clear any stale/broken session tokens on the login page
     // This stops the GoTrue _recoverAndRefresh error from firing on every load
@@ -122,6 +125,32 @@ export default function LoginPage() {
         catch (err: any) { setError(err?.message ?? 'Google sign-in failed'); setGoogleLoading(false); }
     };
 
+    const handleManualConfirm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!manualKey) { setError('Master Key is required.'); return; }
+        setConfirming(true); setError(null);
+        try {
+            const res = await fetch('/api/admin/confirm-user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-key': manualKey.trim()
+                },
+                body: JSON.stringify({ email: email.trim() })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            setInfo(`${data.message} You can now sign in.`);
+            setShowManualConfirm(false);
+            setMode('signin');
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setConfirming(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center relative">
             <Background />
@@ -145,41 +174,90 @@ export default function LoginPage() {
                             </div>
 
                             <AnimatePresence mode="wait">
-                                {error && <motion.div key="error" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex items-start gap-3 p-3.5 mb-5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-sm text-rose-300"><AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />{error}</motion.div>}
-                                {info && <motion.div key="info" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex items-start gap-3 p-3.5 mb-5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-sm text-emerald-300"><ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />{info}</motion.div>}
+                                {error && (
+                                    <motion.div key="error" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-5">
+                                        <div className="flex items-start gap-3 p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-sm text-rose-300">
+                                            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                            <div className="flex-1">
+                                                {error}
+                                                {(error.toLowerCase().includes('confirm') || error.toLowerCase().includes('check your inbox')) && !showManualConfirm && (
+                                                    <button type="button" onClick={() => setShowManualConfirm(true)} className="block mt-2 text-xs font-bold text-white underline decoration-rose-500/50 hover:decoration-white transition-all uppercase tracking-wider">
+                                                        Didn't get email? Manual Verify
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                                {info && (
+                                    <motion.div key="info" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-5">
+                                        <div className="flex items-start gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-sm text-emerald-300">
+                                            <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                            <div className="flex-1">
+                                                {info}
+                                                {!showManualConfirm && info.toLowerCase().includes('check your email') && (
+                                                    <button type="button" onClick={() => setShowManualConfirm(true)} className="block mt-2 text-xs font-bold text-white underline decoration-emerald-500/50 hover:decoration-white transition-all uppercase tracking-wider">
+                                                        Didn't get email? Manual Verify
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
                             </AnimatePresence>
 
-                            <form onSubmit={handleEmailAuth} className="space-y-4">
-                                <AnimatePresence>
-                                    {mode === 'signup' && (
-                                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-                                            <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Full Name</label>
-                                            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="John Smith" autoComplete="name" className="w-full h-12 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Email</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@restaurant.com" autoComplete="email" required className="w-full h-12 pl-11 pr-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
+                            {showManualConfirm ? (
+                                <motion.form initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleManualConfirm} className="space-y-4 p-5 bg-slate-800/40 rounded-2xl border border-slate-700/50 mb-6">
+                                    <div className="flex items-center gap-2 mb-3 text-xs font-bold text-blue-400 uppercase tracking-widest">
+                                        <Lock className="w-3.5 h-3.5" /> Emergency Verification
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Password</label>
-                                    <div className="relative">
-                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                        <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Minimum 8 characters' : '••••••••'} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required className="w-full h-12 pl-11 pr-12 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
-                                        <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
-                                            {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+                                        If Supabase failed to send your confirmation email, enter your **Master Admin Key** below to manually verify `{email}`.
+                                    </p>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Master Access Key</label>
+                                        <input type="password" value={manualKey} onChange={e => setManualKey(e.target.value)} placeholder="Enter Admin123..." required className="w-full h-11 px-4 bg-slate-900/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/40 transition-all font-mono" />
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="button" onClick={() => setShowManualConfirm(false)} className="flex-1 h-10 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700/40 transition-all">Cancel</button>
+                                        <button type="submit" disabled={confirming} className="flex-[2] h-10 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2">
+                                            {confirming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Confirm Account Now'}
                                         </button>
                                     </div>
-                                    {mode === 'signup' && password && <PasswordStrength password={password} />}
-                                </div>
-                                <motion.button type="submit" disabled={formLoading} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
-                                    {formLoading ? (<><Loader2 className="w-4 h-4 animate-spin" />{mode === 'signin' ? 'Signing in…' : 'Creating account…'}</>) : (mode === 'signin' ? 'Sign In →' : 'Create Account →')}
-                                </motion.button>
-                            </form>
+                                </motion.form>
+                            ) : (
+                                <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
+                                    <AnimatePresence>
+                                        {mode === 'signup' && (
+                                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                                                <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Full Name</label>
+                                                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="John Smith" autoComplete="name" className="w-full h-12 px-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Email</label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@restaurant.com" autoComplete="email" required className="w-full h-12 pl-11 pr-4 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5 ml-1">Password</label>
+                                        <div className="relative">
+                                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                            <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder={mode === 'signup' ? 'Minimum 8 characters' : '••••••••'} autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} required className="w-full h-12 pl-11 pr-12 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all" />
+                                            <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                                                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                        {mode === 'signup' && password && <PasswordStrength password={password} />}
+                                    </div>
+                                    <motion.button type="submit" disabled={formLoading} whileHover={{ scale: formLoading ? 1 : 1.02 }} whileTap={{ scale: formLoading ? 1 : 0.98 }} className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all disabled:opacity-60 flex items-center justify-center gap-2">
+                                        {formLoading ? (<><Loader2 className="w-4 h-4 animate-spin" />{mode === 'signin' ? 'Signing in…' : 'Creating account…'}</>) : (mode === 'signin' ? 'Sign In →' : 'Create Account →')}
+                                    </motion.button>
+                                </form>
+                            )}
 
                             <div className="flex items-center gap-3 my-5"><div className="flex-1 h-px bg-slate-700/60" /><span className="text-xs text-slate-500 font-medium">or continue with</span><div className="flex-1 h-px bg-slate-700/60" /></div>
 
