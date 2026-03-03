@@ -166,12 +166,28 @@ export default function LiveOrdersPage() {
         })
         : activeOrders;
 
-    if (loading) return (
-        <div className="flex items-center justify-center h-64">
-            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
-                <RefreshCw className="w-8 h-8 text-blue-500" />
+    if (loading && !orders.length) return (
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-6">
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}>
+                <RefreshCw className="w-12 h-12 text-blue-600/30" />
             </motion.div>
-            <span className="ml-3 text-slate-500">Loading orders from Supabase…</span>
+            <div className="text-center">
+                <h3 className="text-slate-900 font-semibold text-xl">Connecting to orders feed...</h3>
+                <p className="text-slate-500 mt-2 max-w-sm mx-auto text-sm leading-relaxed">
+                    This may take a moment depending on your network. We're establishing a secure link to the database.
+                </p>
+            </div>
+            {error && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 p-5 bg-rose-50 border border-rose-100 rounded-2xl text-center max-w-md shadow-sm">
+                    <p className="text-rose-700 text-sm font-medium mb-4">{error}</p>
+                    <button
+                        onClick={() => loadOrders()}
+                        className="px-6 py-2.5 bg-white border border-rose-200 text-rose-700 text-sm font-bold rounded-xl hover:bg-rose-100 transition-all shadow-sm"
+                    >
+                        Try to Reconnect Now
+                    </button>
+                </motion.div>
+            )}
         </div>
     );
 

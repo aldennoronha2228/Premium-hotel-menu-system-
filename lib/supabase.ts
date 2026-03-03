@@ -55,9 +55,6 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
 
         // MATCH: direct host OR any supabase.co subdomain (to be safe)
         if (u.hostname === supabaseHost || u.hostname.endsWith('supabase.co')) {
-            console.log(`[customFetch] Proxying: ${u.pathname}`);
-
-            // Build the proxy path: /api/auth/proxy?path=...
             const proxyUrl = new URL('/api/auth/proxy', window.location.origin);
 
             // Normalize path (ensure no leading slash)
@@ -71,7 +68,32 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
                 proxyUrl.searchParams.set(k, v);
             });
 
-            return fetch(proxyUrl.toString(), requestInit);
+            // ENTERPRISE RETRY LOGIC (3 Attempts for transient failures)
+            let attempt = 0;
+            const maxAttempts = 3;
+
+            const doFetch = async (): Promise<Response> => {
+                attempt++;
+                try {
+                    const res = await fetch(proxyUrl.toString(), requestInit);
+                    // Retry on Gateway errors (502, 504) or timeout simulations
+                    if (attempt < maxAttempts && (res.status === 502 || res.status === 504)) {
+                        console.warn(`[customFetch] Retry ${attempt}/${maxAttempts} for status ${res.status}: ${path}`);
+                        await new Promise(r => setTimeout(r, 500 * attempt));
+                        return doFetch();
+                    }
+                    return res;
+                } catch (err) {
+                    if (attempt < maxAttempts) {
+                        console.warn(`[customFetch] Retry ${attempt}/${maxAttempts} for error: ${path}`);
+                        await new Promise(r => setTimeout(r, 500 * attempt));
+                        return doFetch();
+                    }
+                    throw err;
+                }
+            };
+
+            return doFetch();
         }
     } catch (err) {
         // parsing error or relative URL — pass through
