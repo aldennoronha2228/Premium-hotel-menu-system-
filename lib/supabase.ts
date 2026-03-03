@@ -53,7 +53,10 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
         const u = new URL(urlStr);
         const supabaseHost = new URL(env.supabaseUrl).hostname;
 
-        if (u.hostname === supabaseHost) {
+        // MATCH: direct host OR any supabase.co subdomain (to be safe)
+        if (u.hostname === supabaseHost || u.hostname.endsWith('supabase.co')) {
+            console.log(`[customFetch] Proxying: ${u.pathname}`);
+
             // Build the proxy path: /api/auth/proxy?path=...
             const proxyUrl = new URL('/api/auth/proxy', window.location.origin);
 
@@ -63,7 +66,7 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
 
             proxyUrl.searchParams.set('path', path);
 
-            // Forward all existing query parameters
+            // Forward existing query params
             u.searchParams.forEach((v, k) => {
                 proxyUrl.searchParams.set(k, v);
             });
@@ -71,7 +74,7 @@ const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promis
             return fetch(proxyUrl.toString(), requestInit);
         }
     } catch (err) {
-        // If URL parsing fails or it's a relative URL, just pass through
+        // parsing error or relative URL — pass through
     }
 
     return fetch(input, requestInit);

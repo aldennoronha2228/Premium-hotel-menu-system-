@@ -48,7 +48,7 @@ async function handleProxy(req: NextRequest) {
     try {
         const body = req.method !== 'GET' && req.method !== 'HEAD' ? await req.text() : undefined;
 
-        // Prepare headers — forward essentials
+        // ... headers preparation ...
         const headers = new Headers();
         const headersToForward = ['content-type', 'authorization', 'apikey', 'prefer', 'range', 'if-none-match'];
 
@@ -57,35 +57,46 @@ async function handleProxy(req: NextRequest) {
             if (val) headers.set(h, val);
         }
 
-        // Ensure apikey and basic auth are present if missing
         if (!headers.has('apikey')) headers.set('apikey', SUPABASE_ANON_KEY);
         if (!headers.has('authorization')) headers.set('authorization', `Bearer ${SUPABASE_ANON_KEY}`);
 
-        const response = await fetch(targetUrl, {
-            method: req.method,
-            headers,
-            body: body || undefined,
-        });
+        // SAFETY: timeout to avoid hanging the client
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
-        const responseBody = await response.text();
-        const resHeaders: Record<string, string> = {
-            'Content-Type': response.headers.get('content-type') ?? 'application/json',
-        };
+        try {
+            console.log(`[supabase-proxy] Starting fetch to: ${targetUrl}`);
+            const response = await fetch(targetUrl, {
+                method: req.method,
+                headers,
+                body: body || undefined,
+                signal: controller.signal,
+            });
 
-        // Forward certain response headers (like content-range for pagination)
-        if (response.headers.has('content-range')) {
-            resHeaders['Content-Range'] = response.headers.get('content-range')!;
+            const responseBody = await response.text();
+            clearTimeout(timeout);
+
+            const resHeaders: Record<string, string> = {
+                'Content-Type': response.headers.get('content-type') ?? 'application/json',
+            };
+
+            if (response.headers.has('content-range')) {
+                resHeaders['Content-Range'] = response.headers.get('content-range')!;
+            }
+
+            return new NextResponse(responseBody, {
+                status: response.status,
+                headers: resHeaders,
+            });
+        } catch (fetchErr: any) {
+            clearTimeout(timeout);
+            throw fetchErr;
         }
-
-        return new NextResponse(responseBody, {
-            status: response.status,
-            headers: resHeaders,
-        });
     } catch (err: any) {
-        console.error('[supabase-proxy] Error:', err.message, 'URL:', targetUrl);
+        console.error('[supabase-proxy] INTERNAL ERROR:', err.name === 'AbortError' ? 'TIME-OUT' : err.message, 'URL:', targetUrl);
         return NextResponse.json(
-            { error: 'Proxy failed', detail: err.message },
-            { status: 502 }
+            { error: 'Proxy Timeout or Failure', detail: err.message },
+            { status: 504 }
         );
     }
 }

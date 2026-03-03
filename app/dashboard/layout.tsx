@@ -43,8 +43,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (loading || !session || !user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center animate-pulse">
-                    <span className="text-white font-bold">H</span>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+                    <p className="text-slate-400 text-sm font-medium">Verifying session...</p>
                 </div>
             </div>
         );

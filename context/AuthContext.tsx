@@ -56,42 +56,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hasInitialized = useRef(false);
 
     useEffect(() => {
-        // onAuthStateChange handles the initial session check AND all subsequent changes.
-        // It fires a callback immediately upon subscription with the current session.
+        let isActive = true;
+
+        // SAFETY: If auth takes more than 1.5s, just show the UI to prevent "stuck" screens.
+        // The dashboard layout will handles redirection if auth truly fails later.
+        const safetyTimer = setTimeout(() => {
+            if (isActive && !hasInitialized.current) {
+                console.warn('[AuthContext] Auth-gate safety release engaged.');
+                setState(prev => ({ ...prev, loading: false }));
+                hasInitialized.current = true;
+            }
+        }, 1500);
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`[AuthContext] event: ${event}`, session ? 'has session' : 'no session');
+            console.log(`[AuthContext] AuthEvent: ${event}`);
 
             if (!session?.user) {
-                // SECURITY: clear state immediately
-                setState({ session: null, user: null, isAdmin: false, loading: false, error: null });
-                hasInitialized.current = true;
+                if (isActive) {
+                    setState({ session: null, user: null, isAdmin: false, loading: false, error: null });
+                    hasInitialized.current = true;
+                    clearTimeout(safetyTimer);
+                }
                 return;
             }
 
-            // For all authenticated events (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, etc.)
             try {
-                // LOCK FIX: Give the auth client a small tick to finalize its own state 
-                // and release storage locks before we start a new DB request.
-                await new Promise(r => setTimeout(r, 10));
+                // Background check - don't block if we already have a session
+                const isAdmin = await checkIsAdmin(session.user).catch(() => false);
 
-                // SECURITY: re-check admin status
-                const isAdmin = await checkIsAdmin(session.user);
-
-                if (event === 'SIGNED_IN' && isAdmin) {
-                    await updateLastLogin(session.user.email!);
+                if (isActive) {
+                    setState({ session, user: session.user, isAdmin, loading: false, error: null });
+                    hasInitialized.current = true;
+                    clearTimeout(safetyTimer);
                 }
-
-                setState({ session, user: session.user, isAdmin, loading: false, error: null });
             } catch (err: any) {
-                console.error('[AuthContext] Admin check failed:', err);
-                setState({ session, user: session.user, isAdmin: false, loading: false, error: err.message });
-            } finally {
-                hasInitialized.current = true;
+                console.error('[AuthContext] Update failed:', err);
+                if (isActive) setState(prev => ({ ...prev, loading: false }));
             }
         });
 
         return () => {
+            isActive = false;
             subscription.unsubscribe();
+            clearTimeout(safetyTimer);
         };
     }, []);
 
