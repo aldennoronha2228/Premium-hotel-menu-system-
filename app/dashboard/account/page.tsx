@@ -74,8 +74,13 @@ export default function AccountPage() {
 
     const handleGateSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const cleanKey = gatePassword.trim();
+        if (!cleanKey) {
+            toast.error('The Admin Master Key cannot be empty.');
+            return;
+        }
         setGateLoading(true);
-        await fetchAdmins(gatePassword);
+        await fetchAdmins(cleanKey);
         setGateLoading(false);
     };
 

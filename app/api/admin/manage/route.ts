@@ -13,14 +13,14 @@ const ADMIN_ACCESS_KEY = process.env.ADMIN_ACCESS_KEY ?? '';
 
 // ─── Verification Gate ───────────────────────────────────────────────────────
 function verifyKey(req: NextRequest) {
-    const key = req.headers.get('x-admin-key');
-    const secret = process.env.ADMIN_ACCESS_KEY ?? '';
+    const key = (req.headers.get('x-admin-key') || '').trim();
+    const secret = (process.env.ADMIN_ACCESS_KEY || '').trim();
 
     const isValid = key === secret && secret !== '';
 
     console.log('[admin-manage] verify check:', {
-        provided_key_len: key?.length ?? 0,
-        expected_key_len: secret.length,
+        provided_len: key.length,
+        actual_len: secret.length,
         match: isValid
     });
 
